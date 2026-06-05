@@ -1,12 +1,12 @@
 # iii-engine v0.11.2 - Production Image (distroless runtime)
-# Uses pre-built binary from GitHub releases (avoids cargo build issues)
+# Uses pre-built binary from GitHub releases
 # Build: docker build -t iiidev/iii:0.11.2 .
 
 FROM curlimages/curl:latest AS downloader
 
 WORKDIR /tmp
 
-# Download pre-built iii-engine v0.11.2 binary for Linux x86_64
+# Download and extract pre-built iii-engine v0.11.2 binary
 RUN curl -fsSL -o iii.tar.gz \
     https://github.com/iii-hq/iii/releases/download/iii/v0.11.2/iii-x86_64-unknown-linux-gnu.tar.gz && \
     tar -xzf iii.tar.gz && \
@@ -18,11 +18,11 @@ FROM gcr.io/distroless/cc-debian12:nonroot
 
 WORKDIR /app
 
-# Copy pre-built binary
+# Copy pre-built binary from downloader stage
 COPY --from=downloader /tmp/iii /app/iii
 
-# Create minimal config if needed
-RUN echo "modules: []" > /app/iii-config.yaml || true
+# NO RUN COMMANDS in distroless final stage!
+# Distroless has no shell, so RUN fails
 
 # Default ports:
 # 3111 - REST API
