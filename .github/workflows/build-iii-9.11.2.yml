@@ -1,0 +1,94 @@
+name: Build & Push iii-engine v0.11.2
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - '.github/workflows/build-iii-0.11.2.yml'
+  workflow_dispatch:
+
+env:
+  IMAGE_NAME: iiidev/iii
+  VERSION: 0.11.2
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          outputs: type=docker,dest=/tmp/image.tar
+
+      - name: Load image
+        run: docker load --input /tmp/image.tar
+
+      - name: Tag image
+        run: |
+          docker tag ${{ env.IMAGE_NAME }}:${{ env.VERSION }} ${{ env.IMAGE_NAME }}:latest
+          echo "IMAGE_DIGEST=$(docker inspect --format='{{.RepoDigests}}' ${{ env.IMAGE_NAME }}:${{ env.VERSION }})" >> $GITHUB_ENV
+
+      - name: Display build info
+        run: |
+          docker images | grep "${{ env.IMAGE_NAME }}"
+          docker inspect ${{ env.IMAGE_NAME }}:${{ env.VERSION }} | head -20
+
+      - name: Save image artifact
+        run: |
+          docker save -o /tmp/iii-engine-0.11.2.tar ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          ls -lh /tmp/iii-engine-0.11.2.tar
+
+      - name: Upload Docker image as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iii-engine-0.11.2-image
+          path: /tmp/iii-engine-0.11.2.tar
+          retention-days: 30
+
+      - name: Generate image info
+        run: |
+          cat > /tmp/image-info.txt << EOF
+          Image: ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
+          Version: ${{ env.VERSION }}
+          Build Date: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          Digest: ${{ env.IMAGE_DIGEST }}
+          EOF
+          cat /tmp/image-info.txt
+
+      - name: Upload image info
+        uses: actions/upload-artifact@v4
+        with:
+          name: iii-engine-0.11.2-info
+          path: /tmp/image-info.txt
+
+      - name: Print download instructions
+        run: |
+          echo "========================================="
+          echo "Image built successfully!"
+          echo "========================================="
+          echo ""
+          echo "Download the image:"
+          echo "  - Go to Actions tab → latest workflow run"
+          echo "  - Download 'iii-engine-0.11.2-image' artifact"
+          echo ""
+          echo "Load and push to artifactory:"
+          echo "  docker load < iii-engine-0.11.2.tar"
+          echo "  docker tag iiidev/iii:0.11.2 artifactory.\${DOMAIN}/docker-local/iiidev/iii:0.11.2"
+          echo "  docker push artifactory.\${DOMAIN}/docker-local/iiidev/iii:0.11.2"
+          echo ""
+          echo "========================================="
